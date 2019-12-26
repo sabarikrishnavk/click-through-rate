@@ -39,7 +39,7 @@ public class ClickThroughRate {
 
 // Load the  clickstreamdata.csv -- four attributes - “User ID”, “Song ID”,  “Date” and “Timestamp.”
 //5525c71b6213340569f3aa1abc225514,1533115844,_JUdlvPU,20180801
-		String path1 = inputPath+ "/activity/sample100mb.csv";
+		String path1 = inputPath+ "/activity/";
 
 //metadata folder -- “Song ID” to an “Artist ID.”A specific "Song ID" can be related to multiple "Artist IDs".
 //Zil3cVnY,516437
@@ -79,18 +79,22 @@ public class ClickThroughRate {
 		Dataset<Row> dataset3 = session.read().format("csv").option("header","false").load(path3);
 		Dataset<Row> dataset4 = session.read().format("csv").option("header","false").load(path4);
 
-//		System.out.println(dataset1.schema());
-//		System.out.println(dataset2.schema());
+//		dataset1.show(5);
+//		dataset2.show(6);
+//		dataset3.show(7);
+		dataset4.show(8);
 
 //Convert userId to a integer.
 		StringIndexer indexer1 = new StringIndexer().setInputCol("_c0").setOutputCol("userId");
 		StringIndexerModel indModel1 = indexer1.fit(dataset1);
 		dataset1 = indModel1.transform(dataset1);
 
-		StringIndexer indexer3 = new StringIndexer().setInputCol("_c0").setOutputCol("userId");
+		StringIndexer indexer3 = new StringIndexer().setInputCol("_c1").setOutputCol("userId");
 		StringIndexerModel indModel3 = indexer3.fit(dataset3);
 		dataset3 = indModel3.transform(dataset3);
 
+//		dataset1.show(5);
+//		dataset3.show(7);
 //Type cast the columns for better readability with column names.
 // Add a rating column for the click event as 1
 
@@ -132,8 +136,8 @@ public class ClickThroughRate {
 		inputData = inputData.drop("songId");
 		outputData = outputData.drop("notificationId");
 
-		inputData.show(20);
-		outputData.show(20);
+		inputData.show(10);
+		outputData.show(10);
 
 		System.out.println("Successfully completed joining the tables.");
 
@@ -149,13 +153,14 @@ public class ClickThroughRate {
 		JavaRDD<Rating> testingData = outputRDD.map(s -> {
 			return new Rating(s.getInt(0),s.getInt(2),0.0);
 		});
-		trainingData.take(10).parallelStream().forEach(rating -> {
-			System.out.println(rating);
-		});
-		System.out.println("---------------.");
-		testingData.take(10).parallelStream().forEach(rating -> {
-			System.out.println(rating);
-		});
+
+//		trainingData.take(10).parallelStream().forEach(rating -> {
+//			System.out.println(rating);
+//		});
+//		System.out.println("---------------.");
+//		testingData.take(10).parallelStream().forEach(rating -> {
+//			System.out.println(rating);
+//		});
 
 // Build the recommendation model using ALS
 		JavaSparkContext jsc = new JavaSparkContext(session.sparkContext());
