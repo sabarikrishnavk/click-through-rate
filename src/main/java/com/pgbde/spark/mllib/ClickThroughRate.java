@@ -52,13 +52,23 @@ public class ClickThroughRate {
 //9553,535722
 		String path4 =inputPath+"/notification_actor";
 
-
-		SparkSession session = SparkSession.builder().master("local")
-				.config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
-				.config("spark.hadoop.fs.s3a.access.key", access_key_amazon)
-				.config("spark.hadoop.fs.s3a.secret.key", secret_key_amazon)
-				.config("fs.s3a.connection.ssl.enabled", "false").config("spark.network.timeout", "600s").config("spark.executor.heartbeatInterval", "500s")
-				.getOrCreate();
+		SparkSession session = null;
+		if(localFlag.equals("aws")) {
+			session = SparkSession.builder().master("local")
+					.config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+					.config("spark.hadoop.fs.s3a.access.key", access_key_amazon)
+					.config("spark.hadoop.fs.s3a.secret.key", secret_key_amazon)
+					.config("fs.s3a.connection.ssl.enabled", "false")
+					.config("spark.network.timeout", "600s")
+					.config("spark.executor.heartbeatInterval", "500s")
+					.getOrCreate();
+		}else{
+			session = SparkSession.builder().master("local")
+					.config("fs.s3a.connection.ssl.enabled", "false")
+					.config("spark.network.timeout", "600s")
+					.config("spark.executor.heartbeatInterval", "500s")
+					.getOrCreate();
+		}
 
 
 
