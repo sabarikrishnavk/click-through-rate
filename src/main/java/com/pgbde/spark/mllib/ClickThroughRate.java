@@ -1,5 +1,8 @@
 package com.pgbde.spark.mllib;
 
+import org.apache.hadoop.conf.Configuration;
+//import com.amazonaws.auth.BasicSessionCredentials;
+//import com.amazonaws.auth.InstanceProfileCredentialsProvider;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -17,6 +20,7 @@ import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import scala.Tuple2;
 
+
 import static org.apache.spark.sql.functions.col;
 
 
@@ -29,6 +33,9 @@ public class ClickThroughRate {
 
 		String inputPath = args[0] ;// "input/";
 		String outputPath =args[1] ;// "output";
+		String localFlag = (args.length >= 3) ? args[2]:"local" ; //local or not
+		String access_key_amazon = args[3];
+		String secret_key_amazon = args[4];
 
 // Load the  clickstreamdata.csv -- four attributes - “User ID”, “Song ID”,  “Date” and “Timestamp.”
 //5525c71b6213340569f3aa1abc225514,1533115844,_JUdlvPU,20180801
@@ -48,10 +55,13 @@ public class ClickThroughRate {
 
 		SparkSession session = SparkSession.builder().master("local")
 				.config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
-				//.config("spark.hadoop.fs.s3a.access.key", access_key_amazon)
-				//.config("spark.hadoop.fs.s3a.secret.key", secret_key_amazon)
+				.config("spark.hadoop.fs.s3a.access.key", access_key_amazon)
+				.config("spark.hadoop.fs.s3a.secret.key", secret_key_amazon)
 				.config("fs.s3a.connection.ssl.enabled", "false").config("spark.network.timeout", "600s").config("spark.executor.heartbeatInterval", "500s")
 				.getOrCreate();
+
+
+
 
 //Read the files from the paths.
 		Dataset<Row> dataset1 = session.read().format("csv").option("header","false").load(path1);
@@ -173,7 +183,14 @@ public class ClickThroughRate {
 
 		session.close();
 	}
-
+//	private static BasicSessionCredentials configureKeySecret(Configuration configuration,
+//															  InstanceProfileCredentialsProvider credentialsProvider) {
+//		BasicSessionCredentials credentials = (BasicSessionCredentials) credentialsProvider.getCredentials();
+//		configuration.set("fs.s3a.access.key", credentials.getAWSAccessKeyId());
+//		configuration.set("fs.s3a.secret.key", credentials.getAWSSecretKey());
+//		configuration.set("fs.s3a.session.token", credentials.getSessionToken());
+//		return credentials;
+//	}
 
 }
 

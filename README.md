@@ -36,4 +36,8 @@ Run the program
 
 Generated model is saved under "output" folder.
 
-java -jar target/click-through-rate-jar-with-dependencies.jar input output
+Refer AWS IAM to generate an aws credentials (access/secret keys)
+
+java -jar target/click-through-rate-jar-with-dependencies.jar input/ output/ aws aws_accesskey aws_secretkey
+
+
