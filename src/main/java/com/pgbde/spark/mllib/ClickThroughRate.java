@@ -34,8 +34,8 @@ public class ClickThroughRate {
 		String inputPath = args[0] ;// "input/";
 		String outputPath =args[1] ;// "output";
 		String localFlag = (args.length >= 3) ? args[2]:"local" ; //local or not
-		String access_key_amazon = args[3];
-		String secret_key_amazon = args[4];
+		String access_key_amazon =  (args.length >= 4) ?args[3]:"accesskey";
+		String secret_key_amazon =  (args.length >= 5) ?args[4]:"secretkey";
 
 // Load the  clickstreamdata.csv -- four attributes - “User ID”, “Song ID”,  “Date” and “Timestamp.”
 //5525c71b6213340569f3aa1abc225514,1533115844,_JUdlvPU,20180801
@@ -83,11 +83,12 @@ public class ClickThroughRate {
 //		System.out.println(dataset2.schema());
 
 //Convert userId to a integer.
-		StringIndexer indexer = new StringIndexer().setInputCol("_c0").setOutputCol("userId");
-		StringIndexerModel indModel1 = indexer.fit(dataset1);
+		StringIndexer indexer1 = new StringIndexer().setInputCol("_c0").setOutputCol("userId");
+		StringIndexerModel indModel1 = indexer1.fit(dataset1);
 		dataset1 = indModel1.transform(dataset1);
 
-		StringIndexerModel indModel3 = indexer.fit(dataset3);
+		StringIndexer indexer3 = new StringIndexer().setInputCol("_c0").setOutputCol("userId");
+		StringIndexerModel indModel3 = indexer3.fit(dataset3);
 		dataset3 = indModel3.transform(dataset3);
 
 //Type cast the columns for better readability with column names.
