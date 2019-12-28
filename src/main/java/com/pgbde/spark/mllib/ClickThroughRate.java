@@ -18,6 +18,7 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.storage.StorageLevel;
 import scala.Tuple2;
 
 
@@ -27,6 +28,7 @@ import static org.apache.spark.sql.functions.col;
 public class ClickThroughRate {
 	
 	public static void main(String[] args) {
+
 
 		Logger.getLogger("org").setLevel(Level.OFF);
 		Logger.getLogger("akka").setLevel(Level.OFF);
@@ -54,6 +56,7 @@ public class ClickThroughRate {
 
 		SparkSession session = null;
 		if(localFlag.equals("aws")) {
+			path1 = inputPath+ "/activity/sample100mb.csv"; //Update path to sample 100MB file
 			session = SparkSession.builder()
 					.config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
 					.config("spark.hadoop.fs.s3a.access.key", access_key_amazon)
@@ -82,19 +85,30 @@ public class ClickThroughRate {
 //		dataset1.show(5);
 //		dataset2.show(6);
 //		dataset3.show(7);
-		dataset4.show(8);
+//		dataset4.show(8);
+
+		dataset1.persist(StorageLevel.MEMORY_AND_DISK_SER());
+		dataset2.persist(StorageLevel.MEMORY_AND_DISK_SER());
+		dataset3.persist(StorageLevel.MEMORY_AND_DISK_SER());
+		dataset4.persist(StorageLevel.MEMORY_AND_DISK_SER());
 
 //Convert userId to a integer.
-		StringIndexer indexer1 = new StringIndexer().setInputCol("_c0").setOutputCol("userId");
-		StringIndexerModel indModel1 = indexer1.fit(dataset1);
-		dataset1 = indModel1.transform(dataset1);
-
+		System.out.println("String indexer started :1 ");
 		StringIndexer indexer3 = new StringIndexer().setInputCol("_c1").setOutputCol("userId");
 		StringIndexerModel indModel3 = indexer3.fit(dataset3);
 		dataset3 = indModel3.transform(dataset3);
 
-//		dataset1.show(5);
 //		dataset3.show(7);
+
+		System.out.println("String indexer started :2 ");
+		StringIndexer indexer1 = new StringIndexer().setInputCol("_c0").setOutputCol("userId");
+		StringIndexerModel indModel1 = indexer1.fit(dataset1);
+		dataset1 = indModel1.transform(dataset1);
+
+		System.out.println("String indexer completed");
+
+//		dataset1.show(5);
+
 //Type cast the columns for better readability with column names.
 // Add a rating column for the click event as 1
 
@@ -117,6 +131,7 @@ public class ClickThroughRate {
 				//.withColumn("ratings", functions.lit(0).cast(DataTypes.FloatType))
 				;
 
+		System.out.println("Column updates completed");
 //Drop the columns
 		String[] drop1Col = {"_c0","_c1","_c2","_c3"};
 		for(String col: drop1Col) {
@@ -128,31 +143,36 @@ public class ClickThroughRate {
 //		data1.show(10);
 //		data2.show(10);
 
+		System.out.println("Column drops completed");
 //Join the dataset to create a single
 		Dataset<Row> inputData =data1.join(data2,"songId");
 		inputData = inputData.na().drop();
-		Dataset<Row> outputData =data3.join(data4,"notificationId");
-
 		inputData = inputData.drop("songId");
-		outputData = outputData.drop("notificationId");
+		inputData.persist(StorageLevel.MEMORY_AND_DISK_SER());
+		System.out.println("Column na and songId completed");
 
-		inputData.show(10);
-		outputData.show(10);
+		Dataset<Row> outputData =data3.join(data4,"notificationId");
+		outputData = outputData.drop("notificationId");
+		outputData.persist(StorageLevel.MEMORY_AND_DISK_SER());
+		System.out.println("Column notificationId completed");
+
+
+//		inputData.show(10);
+//		outputData.show(10);
 
 		System.out.println("Successfully completed joining the tables.");
 
-//Set up Ratings object for ALS ModeL
-		//JavaSparkContext jsc = new JavaSparkContext(session.sparkContext());
-		JavaRDD<Row> inputRDD = inputData.javaRDD();
-		JavaRDD<Rating> trainingData = inputRDD.map(s -> {
+//Set up Ratings object for ALS Model
+		JavaRDD<Rating> trainingData = inputData.javaRDD().map(s -> {
 			return new Rating(s.getInt(0),s.getInt(3),
 					Double.parseDouble(""+s.getFloat(2)));
 		});
 
-		JavaRDD<Row> outputRDD = outputData.javaRDD();
-		JavaRDD<Rating> testingData = outputRDD.map(s -> {
+		System.out.println("Successfully created training RDD.");
+		JavaRDD<Rating> testingData = outputData.javaRDD().map(s -> {
 			return new Rating(s.getInt(0),s.getInt(2),0.0);
 		});
+		System.out.println("Successfully created testing RDD.");
 
 //		trainingData.take(10).parallelStream().forEach(rating -> {
 //			System.out.println(rating);

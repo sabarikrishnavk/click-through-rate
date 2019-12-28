@@ -41,3 +41,5 @@ Refer AWS IAM to generate an aws credentials (access/secret keys)
 java -jar target/click-through-rate-jar-with-dependencies.jar input/ output/ aws aws_accesskey aws_secretkey
 
 
+nohup spark2-submit --class com.pgbde.spark.mllib.ClickThroughRate --master yarn --deploy-mode client --executor-memory 2G --driver-memory 4G click-through-rate-jar-with-dependencies.jar s3a://bigdataanalyticsupgrad/ output/ aws aws_accesskey aws_secretkey >>log.txt &
+
