@@ -54,7 +54,7 @@ public class ClickThroughRate {
 
 		SparkSession session = null;
 		if(localFlag.equals("aws")) {
-			session = SparkSession.builder().master("local")
+			session = SparkSession.builder()
 					.config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
 					.config("spark.hadoop.fs.s3a.access.key", access_key_amazon)
 					.config("spark.hadoop.fs.s3a.secret.key", secret_key_amazon)
