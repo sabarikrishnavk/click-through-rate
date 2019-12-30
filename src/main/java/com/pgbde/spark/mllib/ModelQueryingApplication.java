@@ -5,7 +5,9 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.mllib.recommendation.MatrixFactorizationModel;
 import org.apache.spark.mllib.recommendation.Rating;
+import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.SparkSession;
+import scala.Tuple2;
 
 public class ModelQueryingApplication {
 
@@ -14,9 +16,7 @@ public class ModelQueryingApplication {
         Logger.getLogger("akka").setLevel(Level.OFF);
 
         String modelPath =args[0] ;// "output";
-        int artistId =   (args.length >= 1) ?Integer.parseInt(args[1]) : 535722;
-        String userIdStr = "5525c71b6213340569f3aa1abc225514";//34
-        int topArtistCount =   (args.length >= 2) ?Integer.parseInt(args[2]) : 5;
+        int topArtistCount =   (args.length >= 1) ?Integer.parseInt(args[2]) : 5;
 
 
         SparkSession session = SparkSession.builder().master("local")
@@ -30,7 +30,9 @@ public class ModelQueryingApplication {
 
         MatrixFactorizationModel sameModel = MatrixFactorizationModel.load(jsc.sc(),modelPath);
 
-        Rating[] results = sameModel.recommendUsers(artistId, topArtistCount);
+        Rating[] results = sameModel.recommendUsers(535722, topArtistCount);
+        RDD<Tuple2<Object, Rating[]>> rdd = sameModel.recommendProductsForUsers(topArtistCount);
+
 
         for(Rating result: results){
             System.out.println(result);

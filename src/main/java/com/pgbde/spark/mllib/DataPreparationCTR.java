@@ -1,8 +1,8 @@
 package com.pgbde.spark.mllib;
 
-import org.apache.hadoop.conf.Configuration;
 //import com.amazonaws.auth.BasicSessionCredentials;
 //import com.amazonaws.auth.InstanceProfileCredentialsProvider;
+
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -13,49 +13,47 @@ import org.apache.spark.ml.feature.StringIndexerModel;
 import org.apache.spark.mllib.recommendation.ALS;
 import org.apache.spark.mllib.recommendation.MatrixFactorizationModel;
 import org.apache.spark.mllib.recommendation.Rating;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.functions;
+import org.apache.spark.sql.*;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.storage.StorageLevel;
 import scala.Tuple2;
 
-
 import static org.apache.spark.sql.functions.col;
 
-
-public class ClickThroughRate {
+//this class is used to Prepare the data for processing.
+//Use S3 files and keep it a temp output folder
+public class DataPreparationCTR {
 	
 	public static void main(String[] args) {
 
 
+		System.out.println("Starting data preparation");
 		Logger.getLogger("org").setLevel(Level.OFF);
 		Logger.getLogger("akka").setLevel(Level.OFF);
 
 		String inputPath = args[0] ;// "input/";
-		String outputPath =args[1] ;// "output";
-		String localFlag = (args.length >= 3) ? args[2]:"local" ; //local or not
-		String access_key_amazon =  (args.length >= 4) ?args[3]:"accesskey";
-		String secret_key_amazon =  (args.length >= 5) ?args[4]:"secretkey";
+		String tempPath =args[1] ;// ""target/tmp/sql"";
+		String localFlag = (args.length >= 3) ? args[2]:Constants.LOCAL ; //local or not
+		String access_key_amazon =  (args.length >= 4) ?args[3]: Constants.DEF_ACCESSKEY ;
+		String secret_key_amazon =  (args.length >= 5) ?args[4]: Constants.DEF_SECRETKEY;
 
 // Load the  clickstreamdata.csv -- four attributes - “User ID”, “Song ID”,  “Date” and “Timestamp.”
 //5525c71b6213340569f3aa1abc225514,1533115844,_JUdlvPU,20180801
-		String path1 = inputPath+ "/activity/";
+		String path1 = inputPath + Constants.ACTIVITY_FOLDER ;
 
 //metadata folder -- “Song ID” to an “Artist ID.”A specific "Song ID" can be related to multiple "Artist IDs".
 //Zil3cVnY,516437
-		String path2 =inputPath+"/newmetadata";
+		String path2 =inputPath+Constants.METADATA_FOLDER;
 
 //Notification Clicks -Attributes: "Notification ID", "User ID", and "Date"
 //9681,69f1004d6c2395cf556c76498e041d5e,20180826
-		String path3 =inputPath+"/notification_clicks";
+		String path3 =inputPath+ Constants.NOTIFICATIONCLICK_FOLDER;
 //Notification Artists-- "Notification ID" and "Artist ID"
 //9553,535722
-		String path4 =inputPath+"/notification_actor";
+		String path4 =inputPath+ Constants.NOTIFICATIONACTOR_FOLDER;
 
 		SparkSession session = null;
-		if(localFlag.equals("aws")) {
+		if(localFlag.equals(Constants.AWS) ) {
 			path1 = inputPath+ "/activity/sample100mb.csv"; //Update path to sample 100MB file
 			session = SparkSession.builder()
 					.config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
@@ -92,32 +90,29 @@ public class ClickThroughRate {
 		dataset3.persist(StorageLevel.MEMORY_AND_DISK_SER());
 		dataset4.persist(StorageLevel.MEMORY_AND_DISK_SER());
 
-//Convert userId to a integer.
-		System.out.println("String indexer started :1 ");
-		StringIndexer indexer3 = new StringIndexer().setInputCol("_c1").setOutputCol("userId");
-		StringIndexerModel indModel3 = indexer3.fit(dataset3);
-		dataset3 = indModel3.transform(dataset3);
-
-//		dataset3.show(7);
-
-		System.out.println("String indexer started :2 ");
+		System.out.println("String indexer for testing data set started :1 ");
 		StringIndexer indexer1 = new StringIndexer().setInputCol("_c0").setOutputCol("userId");
 		StringIndexerModel indModel1 = indexer1.fit(dataset1);
 		dataset1 = indModel1.transform(dataset1);
 
-		System.out.println("String indexer completed");
 
 //		dataset1.show(5);
+
+		//Convert userId to a integer.
+		System.out.println("String indexer for training data set started :2 ");
+		StringIndexer indexer3 = new StringIndexer().setInputCol("_c1").setOutputCol("userId");
+		StringIndexerModel indModel3 = indexer3.fit(dataset3);
+		dataset3 = indModel3.transform(dataset3);
+
+		System.out.println("String indexer completed");
+//		dataset3.show(7);
 
 //Type cast the columns for better readability with column names.
 // Add a rating column for the click event as 1
 
 		Dataset<Row> data1 = dataset1.withColumn("userId",col("userId").cast(DataTypes.IntegerType))
 				.withColumn("userId_str", col("_c0").cast(DataTypes.StringType))
-				//.withColumn("timestamp", col("_c1").cast(DataTypes.IntegerType))
-				//.withColumn("date", col("_c3").cast(DataTypes.IntegerType))
-				.withColumn("songId", col("_c2").cast(DataTypes.StringType))
-				.withColumn("ratings", functions.lit(1).cast(DataTypes.FloatType));
+				.withColumn("songId", col("_c2").cast(DataTypes.StringType));
 		Dataset<Row> data2 = dataset2.withColumn("songId", col("_c0").cast(DataTypes.StringType))
 				.withColumn("artistId", col("_c1").cast(DataTypes.IntegerType)) ;
 
@@ -140,93 +135,31 @@ public class ClickThroughRate {
 			data3 = data3.drop(col);
 			data4 = data4.drop(col);
 		}
-//		data1.show(10);
-//		data2.show(10);
+//		data1.show(5);
+//		data2.show(6);
+//		data3.show(7);
+//		data4.show(8);
 
 		System.out.println("Column drops completed");
 //Join the dataset to create a single
 		Dataset<Row> inputData =data1.join(data2,"songId");
-		inputData = inputData.na().drop();
-		inputData = inputData.drop("songId");
-		inputData.persist(StorageLevel.MEMORY_AND_DISK_SER());
-		System.out.println("Column na and songId completed");
-
 		Dataset<Row> outputData =data3.join(data4,"notificationId");
-		outputData = outputData.drop("notificationId");
-		outputData.persist(StorageLevel.MEMORY_AND_DISK_SER());
-		System.out.println("Column notificationId completed");
 
+		inputData.show(5);
+		outputData.show(6);
 
-//		inputData.show(10);
-//		outputData.show(10);
+		inputData = inputData.na().drop();
+		inputData.toDF().write().mode(SaveMode.Overwrite).csv(tempPath+ Constants.TEMPINPUT_FOLDER);
 
-		System.out.println("Successfully completed joining the tables.");
+		System.out.println("save training dataset completed");
 
-//Set up Ratings object for ALS Model
-		JavaRDD<Rating> trainingData = inputData.javaRDD().map(s -> {
-			return new Rating(s.getInt(0),s.getInt(3),
-					Double.parseDouble(""+s.getFloat(2)));
-		});
+		outputData.toDF().write().mode(SaveMode.Overwrite).csv(tempPath+ Constants.TEMPOUTPUT_FOLDER);
 
-		System.out.println("Successfully created training RDD.");
-		JavaRDD<Rating> testingData = outputData.javaRDD().map(s -> {
-			return new Rating(s.getInt(0),s.getInt(2),0.0);
-		});
-		System.out.println("Successfully created testing RDD.");
+		System.out.println("save testing dataset completed");
 
-//		trainingData.take(10).parallelStream().forEach(rating -> {
-//			System.out.println(rating);
-//		});
-//		System.out.println("---------------.");
-//		testingData.take(10).parallelStream().forEach(rating -> {
-//			System.out.println(rating);
-//		});
-
-// Build the recommendation model using ALS
-		JavaSparkContext jsc = new JavaSparkContext(session.sparkContext());
-		int rank = 10;
-		int numIterations = 10;
-
-		System.out.println("Executing ALS training");
-		MatrixFactorizationModel model = ALS.train(JavaRDD.toRDD(trainingData), rank, numIterations, 0.01);
-		System.out.println("Finished ALS training");
-
-
-		// Evaluate the model on notification data set and get the predictions
-		JavaRDD<Tuple2<Object, Object>> userIdArtistId = testingData.map(r -> new Tuple2<>(r.user(), r.product()));
-
-		JavaPairRDD<Tuple2<Integer, Integer>, Double> predictions = JavaPairRDD.fromJavaRDD(
-				model.predict(JavaRDD.toRDD(userIdArtistId)).toJavaRDD()
-						.map(r -> new Tuple2<>(new Tuple2<>(r.user(), r.product()), r.rating()))
-		);
-
-		//Join the predicted ratings and actual values
-		JavaRDD<Tuple2<Double, Double>> ratesAndPreds = JavaPairRDD.fromJavaRDD(
-				trainingData.map(r -> new Tuple2<>(new Tuple2<>(r.user(), r.product()), r.rating())))
-				.join(predictions).values();
-
-		//calculate the mean square error.
-		double MSE = ratesAndPreds.mapToDouble(pair -> {
-			double err = pair._1() - pair._2();
-			return err * err;
-		}).mean();
-
-
-		System.out.println("Mean Squared Error = " + MSE);
-// Save and load model
-		model.save(jsc.sc(), outputPath);
-		MatrixFactorizationModel sameModel = MatrixFactorizationModel.load(jsc.sc(),outputPath);
 
 		session.close();
 	}
-//	private static BasicSessionCredentials configureKeySecret(Configuration configuration,
-//															  InstanceProfileCredentialsProvider credentialsProvider) {
-//		BasicSessionCredentials credentials = (BasicSessionCredentials) credentialsProvider.getCredentials();
-//		configuration.set("fs.s3a.access.key", credentials.getAWSAccessKeyId());
-//		configuration.set("fs.s3a.secret.key", credentials.getAWSSecretKey());
-//		configuration.set("fs.s3a.session.token", credentials.getSessionToken());
-//		return credentials;
-//	}
 
 }
 
