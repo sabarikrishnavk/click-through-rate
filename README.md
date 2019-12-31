@@ -45,4 +45,7 @@ nohup spark2-submit --class com.pgbde.spark.mllib.DataPreparationCTR --master ya
 nohup spark2-submit --class com.pgbde.spark.mllib.DataAnalysisCTR --master yarn --deploy-mode client --executor-memory 2G --driver-memory 4G click-through-rate-jar-with-dependencies.jar s3a://bigdataanalyticsupgrad/ output/ctr/ aws aws_accesskey aws_secretkey >>log.txt &
 
 
+Reference:
 
+https://dataplatform.cloud.ibm.com/exchange/public/entry/view/99b857815e69353c04d95daefb3b91fa
+https://databricks-prod-cloudfront.cloud.databricks.com/public/4027ec902e239c93eaaa8714f173bcfc/3175648861028866/48824497172554/657465297935335/latest.html
