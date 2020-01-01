@@ -76,23 +76,20 @@ public class DataAnalysisCTR {
 		Dataset<Row> inputCSV = session.read().format("csv").option("header","false").load(path1);
 		Dataset<Row> outputCSV = session.read().format("csv").option("header","false").load(path2);
 
+//		System.out.println("testing data count "+inputCSV.count());
+//		System.out.println("training data count "+outputCSV.count());
 
-		System.out.println("testing data count "+inputCSV.count());
-		System.out.println("training data count "+outputCSV.count());
-
-		Dataset<Row> inputData = inputCSV.withColumn("songId",col("_c0").cast(DataTypes.StringType))
+		Dataset<Row> trainingTable = outputCSV.withColumn("notificationId",col("_c0").cast(DataTypes.IntegerType))
 				.withColumn("userId", col("_c1").cast(DataTypes.IntegerType))
 				.withColumn("userId_str", col("_c2").cast(DataTypes.StringType))
-				.withColumn("artistId", col("_c3").cast(DataTypes.IntegerType));
-
-		Dataset<Row> outputData = outputCSV.withColumn("notificationId",col("_c0").cast(DataTypes.IntegerType))
-				.withColumn("userId", col("_c1").cast(DataTypes.IntegerType))
-				.withColumn("userId_str", col("_c2").cast(DataTypes.StringType))
-				.withColumn("artistId", col("_c3").cast(DataTypes.IntegerType));
-		inputCSV.show(10);
-		outputCSV.show(10);
+				.withColumn("artistId", col("_c3").cast(DataTypes.IntegerType))
+				.drop("_c0")
+				.drop("_c1")
+				.drop("_c2")
+				.drop("_c3");
 
 
+		trainingTable.show(100);
 //Set up Ratings object for ALS Model
 		JavaRDD<Rating> trainingData = inputCSV.javaRDD().map(s -> {
 			int userId = Integer.parseInt(""+s.get(1));
@@ -100,18 +97,19 @@ public class DataAnalysisCTR {
 			return new Rating(userId,artistId, new Double(1.0));
 		});
 
+//		outputCSV.show(4);
 		System.out.println("Successfully created training RDD.");
 		JavaRDD<Rating> testingData = outputCSV.javaRDD().map(s -> {
 			int userId = Integer.parseInt(""+s.get(1));
 			int artistId = Integer.parseInt(""+s.get(3));
-			return new Rating(userId,artistId,1.0);
+			return new Rating(userId,artistId,0.0);
 		});
 		System.out.println("Successfully created testing RDD.");
 
 
 // Build the recommendation model using ALS
 		JavaSparkContext jsc = new JavaSparkContext(session.sparkContext());
-		int rank = 10;
+		int rank = 1;
 		int numIterations = 10;
 
 		System.out.println("Executing ALS training");
@@ -128,24 +126,42 @@ public class DataAnalysisCTR {
 		
 		StructType schema = DataTypes.createStructType(new StructField[] {
 				DataTypes.createStructField("artistId",  DataTypes.IntegerType, true),
-				DataTypes.createStructField("userId", DataTypes.IntegerType, true),
+				DataTypes.createStructField("predictedUserId", DataTypes.IntegerType, true),
 				DataTypes.createStructField("rating", DataTypes.DoubleType, true) 
 		});
-		JavaRDD<Row> rowRDD = rdd
-				.flatMap(new FlatMapFunction<Rating, Row>() {
-							 private static final long serialVersionUID = 5481855142090322683L;
-							 @Override
-							 public Iterator<Row> call(Rating r) throws Exception {
-								 List<Row> list = new ArrayList<>();
-								 list.add(RowFactory.create(r.product() ,r.user(),r.rating()));
-								 return list.iterator();
-							 }
-						 });
-		Dataset<Row> dataset = session.sqlContext().createDataFrame(rowRDD, schema).toDF();
+		JavaRDD<Row> rowRDD = rdd.flatMap(
+			new FlatMapFunction<Rating, Row>() {
+				 private static final long serialVersionUID = 5481855142090322683L;
+				 @Override
+				 public Iterator<Row> call(Rating r) throws Exception {
+					 List<Row> list = new ArrayList<>();
+					 list.add(RowFactory.create(r.product() ,r.user(),r.rating()));
+					 return list.iterator();
+				 }
+		 });
+		Dataset<Row> predictedDataset = session.sqlContext().createDataFrame(rowRDD, schema).toDF();
+//		dataset.show(100);
 
-		long count = dataset.count();
-		System.out.println("count "+ count);
-		dataset.show(5);
+		//Since notificationId is grouped by artistId and userId
+		Dataset<Row> predictedCnt = predictedDataset.filter("rating >0 ")
+				.groupBy("artistId")
+				.agg(functions.count("predictedUserId"))
+				.toDF( "artistId","predictedUserIdCnt");
+//		predictedCnt.show(100);
+
+		//Get the notificationId group from
+		Dataset<Row> trainingCnt= trainingTable
+				.groupBy("notificationId","artistId")
+				.agg(functions.count("userId"))
+				.toDF("notificationId", "artistId","userIdCnt");
+//		trainingCnt.show(100);
+
+		Dataset<Row> finalTable =  predictedCnt.join(trainingCnt,"artistId")
+						.selectExpr(" notificationId","artistId" , "userIdCnt / predictedUserIdCnt as ctr");
+		finalTable.show(100);
+
+
+		System.out.println("count "+ finalTable.count());
 
 //		JavaPairRDD<Tuple2<Integer, Integer>, Double> predictions = JavaPairRDD.fromJavaRDD(
 //				model.predict(JavaRDD.toRDD(userIdArtistId)).toJavaRDD()
