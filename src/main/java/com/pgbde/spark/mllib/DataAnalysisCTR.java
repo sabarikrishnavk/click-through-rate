@@ -52,7 +52,6 @@ public class DataAnalysisCTR {
 
 
 		String path1 = tempPath + Constants.TEMPINPUT_FOLDER ;
-
 		String path2 =tempPath+Constants.TEMPOUTPUT_FOLDER;
 
 		if(localFlag.equals(Constants.AWS) ) {
@@ -89,12 +88,12 @@ public class DataAnalysisCTR {
 				.drop("_c3");
 
 
-		trainingTable.show(100);
+//		trainingTable.show(100);
 //Set up Ratings object for ALS Model
 		JavaRDD<Rating> trainingData = inputCSV.javaRDD().map(s -> {
 			int userId = Integer.parseInt(""+s.get(1));
 			int artistId = Integer.parseInt(""+s.get(3));
-			return new Rating(userId,artistId, new Double(1.0));
+			return new Rating(userId,artistId, new Double(10.0));
 		});
 
 //		outputCSV.show(4);
@@ -109,7 +108,7 @@ public class DataAnalysisCTR {
 
 // Build the recommendation model using ALS
 		JavaSparkContext jsc = new JavaSparkContext(session.sparkContext());
-		int rank = 1;
+		int rank = 10;
 		int numIterations = 10;
 
 		System.out.println("Executing ALS training");
@@ -141,9 +140,13 @@ public class DataAnalysisCTR {
 		 });
 		Dataset<Row> predictedDataset = session.sqlContext().createDataFrame(rowRDD, schema).toDF();
 //		dataset.show(100);
-
-		//Since notificationId is grouped by artistId and userId
-		Dataset<Row> predictedCnt = predictedDataset.filter("rating >0 ")
+		//Since n Saavn, the notifications are pushed with the intention of notifying users about their preferred artists.
+		// In other words, notification informs users about the updates from their favoured artists.
+		//Each cluster is targeted with information about only one particular artist.
+		// Simply put, each group should be associated with only one artist and,
+		// just the notifications related to that specific artist must be pushed to the users within that cluster.
+		// notificationId is grouped by artistId and userId
+		Dataset<Row> predictedCnt = predictedDataset//.filter("rating >0 ")
 				.groupBy("artistId")
 				.agg(functions.count("predictedUserId"))
 				.toDF( "artistId","predictedUserIdCnt");
@@ -151,13 +154,21 @@ public class DataAnalysisCTR {
 
 		//Get the notificationId group from
 		Dataset<Row> trainingCnt= trainingTable
-				.groupBy("notificationId","artistId")
+				.groupBy("artistId")
 				.agg(functions.count("userId"))
-				.toDF("notificationId", "artistId","userIdCnt");
+				.toDF("artistId","clickedUserIdCnt");
 //		trainingCnt.show(100);
 
+		//Click-Through Rate(CTR) is a measure that indicates
+		// the ratio of the number of users who clicked on the pushed notification (clickedUserIdCnt from training data set)
+		// to the total number of users to whom that notification was pushed.(predictedUserIdCnt from predicted data set)
+
 		Dataset<Row> finalTable =  predictedCnt.join(trainingCnt,"artistId")
-						.selectExpr(" notificationId","artistId" , "userIdCnt / predictedUserIdCnt as ctr");
+						.selectExpr("artistId" , "clickedUserIdCnt / predictedUserIdCnt as ctr","clickedUserIdCnt" ,"predictedUserIdCnt")
+						.orderBy(col("ctr").desc()) //sort by ctr
+						//.limit(5) //get the top 5
+						;
+		finalTable.limit(5).show();
 		finalTable.show(100);
 
 
