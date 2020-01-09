@@ -30,6 +30,7 @@ import scala.Tuple2;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Random;
 
 import static org.apache.spark.sql.functions.col;
 
@@ -78,15 +79,15 @@ public class DataAnalysisCTR {
 //		System.out.println("testing data count "+inputCSV.count());
 //		System.out.println("training data count "+outputCSV.count());
 
-		Dataset<Row> trainingTable = outputCSV.withColumn("notificationId",col("_c0").cast(DataTypes.IntegerType))
+		Dataset<Row> testingTable = outputCSV.withColumn("notificationId",col("_c0").cast(DataTypes.IntegerType))
 				.withColumn("userId", col("_c1").cast(DataTypes.IntegerType))
 				.withColumn("userId_str", col("_c2").cast(DataTypes.StringType))
 				.withColumn("artistId", col("_c3").cast(DataTypes.IntegerType))
 				.drop("_c0")
 				.drop("_c1")
 				.drop("_c2")
-				.drop("_c3");
-
+				.drop("_c3")
+				.orderBy(col("artistId"),col("userId"));
 
 //		trainingTable.show(100);
 //Set up Ratings object for ALS Model
@@ -108,11 +109,12 @@ public class DataAnalysisCTR {
 
 // Build the recommendation model using ALS
 		JavaSparkContext jsc = new JavaSparkContext(session.sparkContext());
-		int rank = 10;
+		int rank = 5;
 		int numIterations = 10;
+		double lambda = 10; //0.01
 
 		System.out.println("Executing ALS training");
-		MatrixFactorizationModel model = ALS.train(JavaRDD.toRDD(trainingData), rank, numIterations, 0.01);
+		MatrixFactorizationModel model = ALS.train(JavaRDD.toRDD(trainingData), rank, numIterations, lambda);
 		System.out.println("Finished ALS training");
 
 
@@ -138,7 +140,7 @@ public class DataAnalysisCTR {
 					 return list.iterator();
 				 }
 		 });
-		Dataset<Row> predictedDataset = session.sqlContext().createDataFrame(rowRDD, schema).toDF();
+		Dataset<Row> predictedDataset = session.sqlContext().createDataFrame(rowRDD, schema).toDF().orderBy(col("artistId"),col("predictedUserId"));
 //		dataset.show(100);
 		//Since n Saavn, the notifications are pushed with the intention of notifying users about their preferred artists.
 		// In other words, notification informs users about the updates from their favoured artists.
@@ -152,27 +154,51 @@ public class DataAnalysisCTR {
 				.toDF( "artistId","predictedUserIdCnt");
 //		predictedCnt.show(100);
 
-		//Get the notificationId group from
-		Dataset<Row> trainingCnt= trainingTable
+		//Get the artistId group from notification testing data set
+		Dataset<Row> testingCnt= testingTable
 				.groupBy("artistId")
 				.agg(functions.count("userId"))
 				.toDF("artistId","clickedUserIdCnt");
 //		trainingCnt.show(100);
 
+
+		//GroupBy artistId to get predictedUserId and groupby predictedUserIds to generate the clusterId
+		Dataset<Row> predictedUserArtistCluster = predictedDataset.groupBy("artistId")
+				.agg(functions.collect_list("predictedUserId").alias("predictedUserIds"))
+				.groupBy("predictedUserIds")
+				.agg(functions.collect_list("artistId").alias("artistIds"))
+				.withColumn("clusterId", functions.monotonically_increasing_id()) ;
+		predictedUserArtistCluster.show(100);
+		System.out.println("Predicted User activity cluster generated.");
+
+		Dataset<Row> testingUserArtistCluster = testingTable.groupBy("artistId")
+				.agg(functions.collect_list("userId").alias("testUserIds"))
+				.groupBy("testUserIds")
+				.agg(functions.collect_list("artistId").alias("artistIds"))
+				.withColumn("clusterId", functions.monotonically_increasing_id()) ;
+		testingUserArtistCluster.show(100);
+
+		//userArtistCluster.toDF().write().mode(SaveMode.Overwrite).csv(outputPath+ Constants.USERACTIVITY_FOLDER);
+		System.out.println("Test User activity cluster generated.");
+
 		//Click-Through Rate(CTR) is a measure that indicates
 		// the ratio of the number of users who clicked on the pushed notification (clickedUserIdCnt from training data set)
 		// to the total number of users to whom that notification was pushed.(predictedUserIdCnt from predicted data set)
 
-		Dataset<Row> finalTable =  predictedCnt.join(trainingCnt,"artistId")
-						.selectExpr("artistId" , "clickedUserIdCnt / predictedUserIdCnt as ctr","clickedUserIdCnt" ,"predictedUserIdCnt")
-						.orderBy(col("ctr").desc()) //sort by ctr
-						//.limit(5) //get the top 5
-						;
-		finalTable.limit(5).show();
-		finalTable.show(100);
+		Dataset<Row> finalTable = testingUserArtistCluster.join(predictedUserArtistCluster,"clusterId")
+				.select( col("clusterId"),
+						functions.size(col("testUserIds")),
+						functions.size(col("predictedUserIds"))
+						)
+				.toDF("clusterId","clickedUserIdCnt" ,"predictedUserIdCnt")
+				.selectExpr("clusterId" ,"clickedUserIdCnt" ,"predictedUserIdCnt", "clickedUserIdCnt / predictedUserIdCnt as ctr")
+				.orderBy(col("ctr").desc());
 
+		finalTable.toDF().write().mode(SaveMode.Overwrite).csv(outputPath+ Constants.CTR_FOLDER);
+		System.out.println("Click through rate generated.");
 
-		System.out.println("count "+ finalTable.count());
+		session.close();
+	}
 
 //		JavaPairRDD<Tuple2<Integer, Integer>, Double> predictions = JavaPairRDD.fromJavaRDD(
 //				model.predict(JavaRDD.toRDD(userIdArtistId)).toJavaRDD()
@@ -196,9 +222,6 @@ public class DataAnalysisCTR {
 //		// Save and load model
 //		model.save(jsc.sc(), outputPath);
 //		MatrixFactorizationModel sameModel = MatrixFactorizationModel.load(jsc.sc(),outputPath);
-
-		session.close();
-	}
 
 }
 
