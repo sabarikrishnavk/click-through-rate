@@ -4,6 +4,7 @@ public class Constants {
     public static final String LOCAL ="local" ;
     public static final String DEF_ACCESSKEY = "accesskey";
     public static final String DEF_SECRETKEY = "secretkey";
+    public static final String SAVEMODE_I = "1";
 
     public static final String ACTIVITY_FOLDER = "/activity/";
     public static final String METADATA_FOLDER = "/newmetadata/";
@@ -13,6 +14,7 @@ public class Constants {
     public static final String AWS = "aws";
     public static final String TEMPINPUT_FOLDER = "/input/";
     public static final String TEMPOUTPUT_FOLDER = "/output/" ;
+    public static final String MODELOUTPUT_FOLDER = "/model/" ;
 
 
     public static final String USERACTIVITY_FOLDER = "/useractivity/" ;

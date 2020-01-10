@@ -1,5 +1,4 @@
-package com.pgbde.spark.mllib;
-
+import com.pgbde.spark.mllib.Constants;
 import org.apache.hadoop.conf.Configuration;
 //import com.amazonaws.auth.BasicSessionCredentials;
 //import com.amazonaws.auth.InstanceProfileCredentialsProvider;

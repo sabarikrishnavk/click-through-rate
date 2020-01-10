@@ -56,7 +56,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.pgbde.spark.mllib.DataAnalysisCTR</mainClass>
+                            <mainClass>DataAnalysisCTR</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>
