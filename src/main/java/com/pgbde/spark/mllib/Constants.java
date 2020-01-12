@@ -6,8 +6,7 @@ public class Constants {
     public static final String DEF_SECRETKEY = "secretkey";
     public static final String SAVEMODE_I = "1";
     public static final int PROGRAM_CHECKPOINT_1 = 1; //Data prep
-    public static final int PROGRAM_CHECKPOINT_2 = 2; //Training data persistence
-    public static final int PROGRAM_CHECKPOINT_3 = 2; //Predictions using training RDD
+    public static final int PROGRAM_CHECKPOINT_2 = 2; //Training data and Predictions using training RDD
 
     public static final String ACTIVITY_FOLDER = "/activity/";
     public static final String METADATA_FOLDER = "/newmetadata/";
@@ -20,6 +19,5 @@ public class Constants {
     public static final String MODELOUTPUT_FOLDER = "/model/" ;
 
 
-    public static final String USERACTIVITY_FOLDER = "/useractivity/" ;
     public static final String CTR_FOLDER = "/ctr/" ;
 }

@@ -63,7 +63,9 @@ public class ClickThroughRate {
 					.config("fs.s3a.connection.ssl.enabled", "false")
 					.config("spark.network.timeout", "600s")
 					.config("spark.executor.heartbeatInterval", "500s")
-					.config("spark.sql.shuffle.partitions","200")
+					//.config("spark.sql.shuffle.partitions","200")
+					.config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+					.config("spark.sql.autoBroadcastJoinThreshold", -1)
 					.getOrCreate();
 		}else{
 			session = SparkSession.builder().master("local")
@@ -71,6 +73,7 @@ public class ClickThroughRate {
 					.config("spark.network.timeout", "600s")
 					.config("spark.executor.heartbeatInterval", "500s")
 					.config("spark.sql.shuffle.partitions","200")
+					.config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
 					.getOrCreate();
 		}
 
@@ -104,8 +107,8 @@ public class ClickThroughRate {
 //			dataset1.show(5);
 //			dataset2.show(6);
 
-			dataset1.persist(StorageLevel.MEMORY_AND_DISK_SER());
-			dataset2.persist(StorageLevel.MEMORY_AND_DISK_SER());
+//			dataset1.persist(StorageLevel.MEMORY_AND_DISK_SER());
+//			dataset2.persist(StorageLevel.MEMORY_AND_DISK_SER());
 
 			System.out.println("Training Data :String indexer started ");
 			StringIndexer indexer1 = new StringIndexer().setInputCol("userId_str").setOutputCol("userId");
@@ -151,8 +154,8 @@ public class ClickThroughRate {
 
 //			dataset3.show(7);
 //			dataset4.show(8);
-			dataset3.persist(StorageLevel.MEMORY_AND_DISK_SER());
-			dataset4.persist(StorageLevel.MEMORY_AND_DISK_SER());
+//			dataset3.persist(StorageLevel.MEMORY_AND_DISK_SER());
+//			dataset4.persist(StorageLevel.MEMORY_AND_DISK_SER());
 
 			//Convert userId to a integer.
 			System.out.println("Testing Data :String indexer started ");
@@ -161,41 +164,15 @@ public class ClickThroughRate {
 			dataset3 = indModel3.transform(dataset3).withColumn("userId", col("userId").cast(DataTypes.IntegerType));
 			System.out.println("Testing Data :String indexer completed");
 
-			Dataset<Row> clickData = dataset3
+			Dataset<Row> testingData = dataset3
 					.join(dataset4, "notificationId")
 					.drop(col("notificationId")).drop(col("date")).drop(col("userId_str"))
-					.dropDuplicates();
-			System.out.println("Testing Data :clickData count." + clickData.count());
-
-
-			clickData.persist(StorageLevel.MEMORY_AND_DISK_SER());
-			Dataset<Row> testingData = clickData
+					.dropDuplicates()
 					.orderBy(col("artistId"), col("userId"));
-			System.out.println("Testing Data :Remove duplicate records. testingData count " + testingData.count());
-//			Dataset<Row> testingData = clickData.randomSplit(new double[]{0.7,0.3})[1]
-//					.orderBy(col("artistId"), col("userId"));
-//			testingData.show(5);
-			//System.out.println("Testing Data :count:" +outputData.count());
+			//System.out.println("Testing Data :clickData count." + clickData.count());
+			testingData.persist(StorageLevel.MEMORY_AND_DISK_SER());
+			System.out.println("Testing Data : Clean up completed");
 
-
-//			testingData.toDF().write().mode(SaveMode.Overwrite).csv(outputPath + Constants.TEMPOUTPUT_FOLDER);
-//			System.out.println("Testing Data :Saved Successfully");
-//
-//		}
-//
-//		if(startPoint <= Constants.PROGRAM_CHECKPOINT_3) {
-//			// Evaluate the model on notification data set and get the predictions
-//			JavaRDD<String> plines = jsc.textFile(outputPath + Constants.TEMPOUTPUT_FOLDER, 1);
-//			JavaRDD<String[]> rowMapRdd = plines.map(line -> line.split(","));
-//			JavaPairRDD<Integer,Integer> userIdArtistId = rowMapRdd.mapToPair(record ->{
-//
-//					System.out.println("record " +  record[0]);
-//					return  new Tuple2<Integer, Integer>(Integer.parseInt(record[1]),Integer.parseInt(record[0]));
-//			});
-//
-//			Dataset<Row> testingData = session.read()
-//					.format("csv").option("header", "false").load(outputPath + Constants.TEMPOUTPUT_FOLDER)
-//					.toDF("artistId", "userId");
 			JavaRDD<Tuple2<Object, Object>> userIdArtistId = testingData.javaRDD().map(s -> {
 				int userId = Integer.parseInt("" + s.get(0));
 				int artistId = Integer.parseInt("" + s.get(1));
@@ -229,7 +206,9 @@ public class ClickThroughRate {
 					.createDataFrame(rowRDD, schema)
 					.toDF()
 					.orderBy(col("artistId"), col("predictedUserId"));
-			predictedDataset.persist(StorageLevel.MEMORY_AND_DISK_SER());
+
+			System.out.println("Prediction : Dataset creation completed");
+//			predictedDataset.persist(StorageLevel.MEMORY_AND_DISK_SER());
 
 //		dataset.show(100);
 			//Since n Saavn, the notifications are pushed with the intention of notifying users about their preferred artists.
