@@ -166,7 +166,9 @@ public class ClickThroughRate {
 
 			Dataset<Row> testingData = dataset3
 					.join(dataset4, "notificationId")
-					.drop(col("notificationId")).drop(col("date")).drop(col("userId_str"))
+//					.drop(col("notificationId"))
+					.drop(col("date"))
+					.drop(col("userId_str"))
 					.dropDuplicates()
 					.orderBy(col("artistId"), col("userId"));
 			//System.out.println("Testing Data :clickData count." + clickData.count());
@@ -174,8 +176,8 @@ public class ClickThroughRate {
 			System.out.println("Testing Data : Clean up completed");
 
 			JavaRDD<Tuple2<Object, Object>> userIdArtistId = testingData.javaRDD().map(s -> {
-				int userId = Integer.parseInt("" + s.get(0));
-				int artistId = Integer.parseInt("" + s.get(1));
+				int userId = Integer.parseInt("" + s.get(1));
+				int artistId = Integer.parseInt("" + s.get(2));
 				return new Tuple2<>(userId, artistId);
 			});
 			System.out.println("Prediction :Testing Data :RDD.");
@@ -216,24 +218,21 @@ public class ClickThroughRate {
 			//Each cluster is targeted with information about only one particular artist.
 			// Simply put, each group should be associated with only one artist and,
 			// just the notifications related to that specific artist must be pushed to the users within that cluster.
-			// notificationId is grouped by artistId and userId
-
 
 			//GroupBy artistId to get predictedUserId and groupby predictedUserIds to generate the clusterId
 			Dataset<Row> predictedUserArtistCluster = predictedDataset.groupBy("artistId")
 					.agg(functions.collect_list("predictedUserId").alias("predictedUserIds"))
-					.groupBy("predictedUserIds")
-					.agg(functions.collect_list("artistId").alias("artistIds"))
 					.withColumn("clusterId", functions.monotonically_increasing_id());
 			predictedUserArtistCluster.show(100);
 
+
 			System.out.println("Predicted User activity cluster generated.");
 
-			Dataset<Row> testingUserArtistCluster = testingData.groupBy("artistId")
+			Dataset<Row> testingUserArtistCluster = testingData.groupBy( "artistId")
 					.agg(functions.collect_list("userId").alias("testUserIds"))
-					.groupBy("testUserIds")
-					.agg(functions.collect_list("artistId").alias("artistIds"))
 					.withColumn("clusterId", functions.monotonically_increasing_id());
+
+			testingUserArtistCluster= testingUserArtistCluster.join(dataset4,"artistId");
 			testingUserArtistCluster.show(100);
 
 			//userArtistCluster.toDF().write().mode(SaveMode.Overwrite).csv(outputPath+ Constants.USERACTIVITY_FOLDER);
@@ -244,12 +243,12 @@ public class ClickThroughRate {
 			// to the total number of users to whom that notification was pushed.(predictedUserIdCnt from predicted data set)
 
 			Dataset<Row> finalTable = testingUserArtistCluster.join(predictedUserArtistCluster, "clusterId")
-					.select(col("clusterId"),
+					.select(col("notificationId"),col("clusterId"),
 							functions.size(col("testUserIds")),
 							functions.size(col("predictedUserIds"))
 					)
-					.toDF("clusterId", "clickedUserIdCnt", "predictedUserIdCnt")
-					.selectExpr("clusterId", "clickedUserIdCnt", "predictedUserIdCnt", "clickedUserIdCnt / predictedUserIdCnt as ctr")
+					.toDF("notificationId","clusterId", "clickedUserIdCnt", "predictedUserIdCnt")
+					.selectExpr("notificationId","clusterId", "clickedUserIdCnt", "predictedUserIdCnt", "clickedUserIdCnt / predictedUserIdCnt as ctr")
 					.orderBy(col("ctr").desc());
 
 			finalTable.toDF().write().mode(SaveMode.Overwrite).csv(outputPath + Constants.CTR_FOLDER);
