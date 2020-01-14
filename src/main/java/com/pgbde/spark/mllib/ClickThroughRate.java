@@ -155,7 +155,7 @@ public class ClickThroughRate {
 //			dataset3.show(7);
 //			dataset4.show(8);
 //			dataset3.persist(StorageLevel.MEMORY_AND_DISK_SER());
-//			dataset4.persist(StorageLevel.MEMORY_AND_DISK_SER());
+			dataset4.persist(StorageLevel.MEMORY_AND_DISK_SER());
 
 			//Convert userId to a integer.
 			System.out.println("Testing Data :String indexer started ");
